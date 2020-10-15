@@ -283,7 +283,7 @@ def backend_cmake_args(images, components, be, install_dir):
 
 def pytorch_cmake_args():
     return [
-        '-DTRITON_PYTORCH_INCLUDE_PATHS=/opt/tritonserver/include/torch;/opt/tritonserver/include/torch/torch/csrc/api/include;/opt/tritonserver/include/torchvision;/usr/include/python3.6',
+        '-DTRITON_PYTORCH_INCLUDE_PATHS=/opt/tritonserver/include/torch;/opt/tritonserver/include/torch/torch/csrc/api/include;/opt/tritonserver/include/torchvision',
         '-DTRITON_PYTORCH_LIB_PATHS=/opt/tritonserver/backends/pytorch'
     ]
 
@@ -378,12 +378,15 @@ FROM ${BASE_IMAGE} AS tritonserver_onnx
 ARG ONNX_RUNTIME_VERSION
 ARG ONNXRUNTIME_REPO=https://github.com/Microsoft/onnxruntime
 
+# Ensure apt-get won't prompt for selecting options
+ENV DEBIAN_FRONTEND=noninteractive
+
 WORKDIR /workspace
 
 ENV PATH /usr/local/nvidia/bin:/usr/local/cuda/bin:/workspace/cmake-3.14.3-Linux-x86_64/bin:/opt/miniconda/bin:$PATH
 ENV LD_LIBRARY_PATH /opt/miniconda/lib:/usr/lib:/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
 
-# The Onnx Runtime dockerfile is the collection of steps in 
+# The Onnx Runtime dockerfile is the collection of steps in
 # https://github.com/microsoft/onnxruntime/tree/v1.5.1/dockerfiles
 
 # Install common dependencies
@@ -392,8 +395,8 @@ RUN apt-get update && \
 # Dependencies for OpenVINO
 RUN apt-get install -y apt-transport-https ca-certificates zip x11-apps \
         lsb-core wget cpio libboost-python-dev libpng-dev zlib1g-dev libnuma1 \
-        ocl-icd-libopencl1 clinfo libboost-filesystem1.65-dev \
-        libboost-thread1.65-dev protobuf-compiler libprotoc-dev autoconf \
+        ocl-icd-libopencl1 clinfo libboost-filesystem-dev \
+        libboost-thread-dev protobuf-compiler libprotoc-dev autoconf \
         automake libtool libjson-c-dev ocl-icd-libopencl1
 RUN unattended-upgrade
 
@@ -412,7 +415,7 @@ ENV LANG en_US.UTF-8
 RUN wget https://apt.repos.intel.com/openvino/2020/GPG-PUB-KEY-INTEL-OPENVINO-2020 && \
     apt-key add GPG-PUB-KEY-INTEL-OPENVINO-2020 && rm GPG-PUB-KEY-INTEL-OPENVINO-2020 && \
     cd /etc/apt/sources.list.d && \
-    echo "deb https://apt.repos.intel.com/openvino/2020 all main">intel-openvino-2020.list && \ 
+    echo "deb https://apt.repos.intel.com/openvino/2020 all main">intel-openvino-2020.list && \
     apt update && \
     apt -y install intel-openvino-dev-ubuntu18-${ONNX_RUNTIME_OPENVINO_VERSION}.287
 # Text replacement to skip installing CMake via distribution
@@ -473,6 +476,9 @@ FROM ${BASE_IMAGE}
 ARG TRITON_VERSION
 ARG TRITON_CONTAINER_VERSION
 
+# Ensure apt-get won't prompt for selecting options
+ENV DEBIAN_FRONTEND=noninteractive
+
 # libcurl4-openSSL-dev is needed for GCS
 # python3-dev is needed by Torchvision
 # python3-pip is needed by python backend
@@ -509,7 +515,7 @@ RUN pip3 install --upgrade pip && \
 RUN wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | \
       gpg --dearmor - |  \
       tee /etc/apt/trusted.gpg.d/kitware.gpg >/dev/null && \
-    apt-add-repository 'deb https://apt.kitware.com/ubuntu/ bionic main' && \
+    apt-add-repository 'deb https://apt.kitware.com/ubuntu/ focal main' && \
     apt-get update && \
     apt-get install -y --no-install-recommends cmake
 '''
@@ -699,6 +705,9 @@ RUN userdel tensorrt-server > /dev/null 2>&1 || true && \
     [ `id -u $TRITON_SERVER_USER` -eq 1000 ] && \
     [ `id -g $TRITON_SERVER_USER` -eq 1000 ]
 
+# Ensure apt-get won't prompt for selecting options
+ENV DEBIAN_FRONTEND=noninteractive
+
 # libcurl is needed for GCS
 #
 # FIXME python3, python3-pip and the pip installs should only be
@@ -708,7 +717,7 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends \
          libb64-0d \
          libcurl4-openssl-dev \
-         libre2-4 \
+         libre2-5 \
          python3 \
          python3-pip && \
     pip3 install --upgrade pip && \
