@@ -383,22 +383,50 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 WORKDIR /workspace
 
-ENV PATH /usr/local/nvidia/bin:/usr/local/cuda/bin:/workspace/cmake-3.14.3-Linux-x86_64/bin:/opt/miniconda/bin:$PATH
-ENV LD_LIBRARY_PATH /opt/miniconda/lib:/usr/lib:/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
+#ENV PATH /usr/local/nvidia/bin:/usr/local/cuda/bin:/workspace/cmake-3.14.3-Linux-x86_64/bin:/opt/miniconda/bin:$PATH
+#ENV LD_LIBRARY_PATH /opt/miniconda/lib:/usr/lib:/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
 
 # The Onnx Runtime dockerfile is the collection of steps in
 # https://github.com/microsoft/onnxruntime/tree/v1.5.1/dockerfiles
 
-# Install common dependencies
-RUN apt-get update && \
-    apt-get install -y sudo git bash unattended-upgrades
+# Install dependencies from
+# onnxruntime/dockerfiles/scripts/install_common_deps.sh. We don't run
+# that script directly because we don't want cmake installed from that
+# file.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        wget \
+        zip \
+        ca-certificates \
+        build-essential \
+        cmake \
+        curl \
+        libcurl4-openssl-dev \
+        libssl-dev \
+        python3-dev \
+        python3-pip
+RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-4.5.11-Linux-x86_64.sh -O ~/miniconda.sh \
+        --no-check-certificate && \
+    /bin/bash ~/miniconda.sh -b -p /opt/miniconda && \
+    rm ~/miniconda.sh && \
+    /opt/miniconda/bin/conda clean -ya
+
+#RUN apt-get update && \
+#    apt-get install -y sudo git bash unattended-upgrades
 # Dependencies for OpenVINO
-RUN apt-get install -y apt-transport-https ca-certificates zip x11-apps \
+#RUN apt-get install -y apt-transport-https ca-certificates zip x11-apps \
         lsb-core wget cpio libboost-python-dev libpng-dev zlib1g-dev libnuma1 \
         ocl-icd-libopencl1 clinfo libboost-filesystem-dev \
         libboost-thread-dev protobuf-compiler libprotoc-dev autoconf \
         automake libtool libjson-c-dev ocl-icd-libopencl1
-RUN unattended-upgrade
+#RUN unattended-upgrade
+
+# Allow configure to pick up GDK and CuDNN where it expects it.
+# (Note: $CUDNN_VERSION is defined by NVidia's base image)
+RUN _CUDNN_VERSION=$(echo $CUDNN_VERSION | cut -d. -f1-2) && \
+    mkdir -p /usr/local/cudnn-$_CUDNN_VERSION/cuda/include && \
+    ln -s /usr/include/cudnn.h /usr/local/cudnn-$_CUDNN_VERSION/cuda/include/cudnn.h && \
+    mkdir -p /usr/local/cudnn-$_CUDNN_VERSION/cuda/lib64 && \
+    ln -s /etc/alternatives/libcudnn_so /usr/local/cudnn-$_CUDNN_VERSION/cuda/lib64/libcudnn.so
 
 # Install OpenVINO
 ARG ONNX_RUNTIME_OPENVINO_VERSION
@@ -413,7 +441,7 @@ RUN wget https://apt.repos.intel.com/openvino/2021/GPG-PUB-KEY-INTEL-OPENVINO-20
     cd /etc/apt/sources.list.d && \
     echo "deb https://apt.repos.intel.com/openvino/2021 all main">intel-openvino-2021.list && \
     apt update && \
-    apt install -y intel-openvino-dev-ubuntu18-2021.1.110 && \
+    apt install -y intel-openvino-dev-ubuntu18-${ONNX_RUNTIME_OPENVINO_VERSION}.110 && \
     cd ${INTEL_OPENVINO_DIR}/install_dependencies && ./install_openvino_dependencies.sh
 
 RUN wget https://github.com/intel/compute-runtime/releases/download/19.41.14441/intel-gmmlib_19.3.2_amd64.deb && \
@@ -421,25 +449,16 @@ RUN wget https://github.com/intel/compute-runtime/releases/download/19.41.14441/
     wget https://github.com/intel/compute-runtime/releases/download/19.41.14441/intel-igc-opencl_1.0.2597_amd64.deb && \
     wget https://github.com/intel/compute-runtime/releases/download/19.41.14441/intel-opencl_19.41.14441_amd64.deb && \
     wget https://github.com/intel/compute-runtime/releases/download/19.41.14441/intel-ocloc_19.41.14441_amd64.deb && \
-    sudo dpkg -i *.deb && rm -rf *.deb
+    dpkg -i *.deb && rm -rf *.deb
 
-# Allow configure to pick up GDK and CuDNN where it expects it.
-# (Note: $CUDNN_VERSION is defined by NVidia's base image)
-RUN _CUDNN_VERSION=$(echo $CUDNN_VERSION | cut -d. -f1-2) && \
-    mkdir -p /usr/local/cudnn-$_CUDNN_VERSION/cuda/include && \
-    ln -s /usr/include/cudnn.h /usr/local/cudnn-$_CUDNN_VERSION/cuda/include/cudnn.h && \
-    mkdir -p /usr/local/cudnn-$_CUDNN_VERSION/cuda/lib64 && \
-    ln -s /etc/alternatives/libcudnn_so /usr/local/cudnn-$_CUDNN_VERSION/cuda/lib64/libcudnn.so
-
-# Install ONNX Runtime
+# Clone and build ONNX Runtime
 RUN git clone -b rel-${ONNX_RUNTIME_VERSION} --recursive ${ONNXRUNTIME_REPO} onnxruntime && \
-    (cd onnxruntime && \
-            git submodule update --init --recursive)
-RUN /bin/sh onnxruntime/dockerfiles/scripts/install_common_deps.sh
-RUN cd /workspace/onnxruntime/cmake/external/onnx && python3 setup.py install
+    (cd onnxruntime && git submodule update --init --recursive)
+#RUN /bin/sh onnxruntime/dockerfiles/scripts/install_common_deps.sh
+#RUN cd /workspace/onnxruntime/cmake/external/onnx && python3 setup.py install
 
-ENV PATH /usr/bin:$PATH
-RUN cmake --version
+#ENV PATH /usr/bin:$PATH
+#RUN cmake --version
 
 ARG COMMON_BUILD_ARGS="--skip_submodule_sync --parallel --build_shared_lib --use_openmp"
 RUN mkdir -p /workspace/build
