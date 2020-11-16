@@ -168,7 +168,7 @@ TritonModel::Create(
     }
   }
 #ifdef _WIN32
-  const std::string backend_libname = "libtriton_" + backend_name + ".dll";
+  const std::string backend_libname = "triton_" + backend_name + ".dll";
 #else
   const std::string backend_libname = "libtriton_" + backend_name + ".so";
 #endif
